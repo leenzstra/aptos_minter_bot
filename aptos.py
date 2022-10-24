@@ -5,39 +5,33 @@ from aptos_sdk.bcs import *
 from requests import Session
 from aptos_sdk.transactions import *
 
-
-class Result:
-    def __init__(self, data=None, error=None) -> None:
-        self.data = data
-        self.error = error
+with open('config.json') as json_file:
+    config = json.load(json_file)
 
 rest = Session()
 rest.headers.update(
     {"User-Agent": "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/5320 (KHTML, like Gecko) Chrome/36.0.875.0 Mobile Safari/5320"})
-base_url = "https://fullnode.mainnet.aptoslabs.com/v1"
+base_url = config["api"]
 
 rest_client = RestClient(base_url)
 seq_num = None
-gas_price = 250
+gas_price = config['gas_price']
 
 acc = Account.load_key(
-    "private_key")
-# acc = Account.load_key(
-#     "")
+    config['account'])
 
 market_addr = "0xd1fd99c1944b84d1670a2536417e997864ad12303d19eac725891691b04d614e"
 market = "0x2a1f62a1663fc7e6c08753e8fc925fbcb946c4b80c5c95a95314a16bc3ac24bc"
-buy_func = "f{market_addr}::marketplaceV2::batch_buy_script"
-list_func = "f{market_addr}::marketplaceV2::batch_list_script"
 
 
-def get_new_listings(seq: None) -> Result:
-    r = rest.get(f"{base_url}/accounts/{market}/events/0xd1fd99c1944b84d1670a2536417e997864ad12303d19eac725891691b04d614e::marketplaceV2::ListedItemsData/listing_events",
+def get_new_listings(seq: None):
+    r = rest.get(f"{base_url}/accounts/{market}/events/{market_addr}::marketplaceV2::ListedItemsData/listing_events",
                  params={} if seq == 0 else {'start': seq})
     if r.status_code != 200:
-        return Result(error=r.text)
+        return {}
 
-    return Result(data=r.json())
+    return r.json()
+
 
 def mint_nft_m(factory, count, account):
     args = [
@@ -45,6 +39,7 @@ def mint_nft_m(factory, count, account):
     ]
 
     return transact(account, f"{factory}::factory::mint_with_quantity", [], args)
+
 
 def list_nft_m(creator, collection, nft_name, price, account, seq):
     args = [
@@ -57,6 +52,7 @@ def list_nft_m(creator, collection, nft_name, price, account, seq):
 
     return transact(account, f"{market_addr}::marketplaceV2::batch_list_script", [], args, seq)
 
+
 def change_price_m(creator, collection, nft_name, price, account, seq):
     args = [
         [creator],
@@ -68,12 +64,15 @@ def change_price_m(creator, collection, nft_name, price, account, seq):
 
     return transact(account, f"{market_addr}::marketplaceV2::change_price_token", [], args, seq)
 
+
 def list_nft_and_change_price(creator, collection, nft_name, price, new_price, account: Account):
     seq = rest_client.account_sequence_number(account.address())
     tx1 = list_nft_m(creator, collection, nft_name, price, account, seq)
     seq += 1
-    tx2 = change_price_m(creator, collection, nft_name, new_price, account, seq)
-    return (tx1, tx2)    
+    tx2 = change_price_m(creator, collection, nft_name,
+                         new_price, account, seq)
+    return (tx1, tx2)
+
 
 def buy_nft_m(creator, collection, nft_name, account: Account):
     args = [
@@ -85,6 +84,7 @@ def buy_nft_m(creator, collection, nft_name, account: Account):
     ]
 
     return transact(account, f"{market_addr}::marketplaceV2::batch_buy_script", [], args, rest_client.account_sequence_number(account.address()))
+
 
 def transact(sender: Account, function: str, type_args: list, args: list, seq: int = None):
 
@@ -125,6 +125,7 @@ def transact(sender: Account, function: str, type_args: list, args: list, seq: i
 
     return response.json()["hash"]
 
+
 def monitoring(buy: bool, list: bool, max_price: float, collection: str):
     list_seq = -1
     buy_seq = -1
@@ -148,21 +149,22 @@ def monitoring(buy: bool, list: bool, max_price: float, collection: str):
                                    collection, event['data']['id']['token_data_id']['name'], acc)
                 except:
                     print("err")
-                print(tx)
-                
-        time.sleep(1)
+                print("----------", tx, "-------------")
+
+        time.sleep(0.1)
 
         first = False
 
+
 def get_balance():
-    # r = rest_client.account_resources(acc.account_address, "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>")
     r = rest.get(
         f"{base_url}/accounts/{acc.address()}/resources")
     for res in r.json():
         if res['type'] == "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>":
             return int(res['data']['coin']['value'])
 
-def start_mint_wait():
+
+def start_mint_wait(start_time_h: int, factory: str, count: int, tries: int):
     if not seq_num:
         seq_num = rest_client.account_sequence_number(acc.address())
 
@@ -170,91 +172,27 @@ def start_mint_wait():
 
     now = datetime.datetime.now()
     print(now.hour)
+    print("waiting...")
     while True:
-        if now.hour == 21:
+        if now.hour == start_time_h:
             break
 
     print("ITS TIME")
-    for _ in range(0, 1):
+    for _ in range(0, tries):
         tx = mint_nft_m(
-                "0x8eafc4721064e0d0a20da5c696f8874a3c38967936f0f96b418e13f2a31dcf4c", 1, acc)
-        time.sleep(0.5)
-        seq_num+=1
+            factory, count, acc)
+        time.sleep(0.25)
+        seq_num += 1
     print(tx)
+
 
 if __name__ == "__main__":
 
-    start_mint_wait()
-    
+    start_mint_wait(22, config['factory'], 1, 4)
+
     # monitoring(True, False, 3.75,"Aptos Wizards")
-    
-    # list_nft_and_change_price("0x6d4336aeac8441314cacdd42ea7aae57b3fad71ea26a00186a23eb8f1fa19ffb", 
+
+    # list_nft_and_change_price("0x6d4336aeac8441314cacdd42ea7aae57b3fad71ea26a00186a23eb8f1fa19ffb",
     #                           "Aptos Wizards", "Aptos Wizards #", int(4*(10**8)), int(6*(10**8)), acc)
-    
+
     # exit(0)
-
-
-# "args":[
-#             "0x1d987fb9fda5453d71e5bc3ce57a74d6cddc0b245a0906a6e96b3ac1541aeda69", -creator
-#             "0x10c426967466f6f7420546f776e",
-#             "0x112426967466f6f7420546f776e202337333438",
-#             "0x10000000000000000"
-#          ]
-
-# {
-#       "name": "batch_buy_script",
-#       "visibility": "public",
-#       "is_entry": true,
-#       "generic_type_params": [],
-#       "params": [
-#         "&signer",
-#         "vector<address>",
-#         "vector<0x1::string::String>",
-#         "vector<0x1::string::String>",
-#         "vector<u64>"
-#       ],
-#       "return": []
-    # },'
-
-# {
-#   "function": "0xd1fd99c1944b84d1670a2536417e997864ad12303d19eac725891691b04d614e::marketplaceV2::batch_buy_script",
-#   "type_arguments": [],
-#   "arguments": [
-#     [
-#       "0xd987fb9fda5453d71e5bc3ce57a74d6cddc0b245a0906a6e96b3ac1541aeda69"
-#     ],
-#     [
-#       "BigFoot Town"
-#     ],
-#     [
-#       "BigFoot Town #2349"
-#     ],
-#     [
-#       "0"
-#     ]
-#   ],
-#   "type": "entry_function_payload"
-# }'
-
-# {
-#   "function": "0xd1fd99c1944b84d1670a2536417e997864ad12303d19eac725891691b04d614e::marketplaceV2::batch_list_script",
-#   "type_arguments": [],
-#   "arguments": [
-#     [
-#       "0xd987fb9fda5453d71e5bc3ce57a74d6cddc0b245a0906a6e96b3ac1541aeda69"
-#     ],
-#     [
-#       "BigFoot Town"
-#     ],
-#     [
-#       "BigFoot Town #2349"
-#     ],
-#     [
-#       "129000000"
-#     ],
-#     [
-#       "0"
-#     ]
-#   ],
-#   "type": "entry_function_payload"
-# }
