@@ -1,7 +1,7 @@
 {
-    "account":"0x91ce602e0737a44fca6ccfc44ed7c132d5dac14dc3a608111c3d6c2f9182bd3c",
+    "account":"private_key",
     "collection":"Aptos Koalas Army",
-    "factory":"0x...",
+    "factory":"0xb9742b5dc72993aae12844c4b23148bdd6ffacecd3bd51d93f0209e259b03f1c",
     "gas_price":250,
     "api":"https://fullnode.mainnet.aptoslabs.com/v1"
 }
