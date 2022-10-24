@@ -14,7 +14,6 @@ rest.headers.update(
 base_url = config["api"]
 
 rest_client = RestClient(base_url)
-seq_num = None
 gas_price = config['gas_price']
 
 acc = Account.load_key(
@@ -22,6 +21,8 @@ acc = Account.load_key(
 
 market_addr = "0xd1fd99c1944b84d1670a2536417e997864ad12303d19eac725891691b04d614e"
 market = "0x2a1f62a1663fc7e6c08753e8fc925fbcb946c4b80c5c95a95314a16bc3ac24bc"
+
+seq_num = None
 
 
 def get_new_listings(seq: None):
@@ -87,7 +88,7 @@ def buy_nft_m(creator, collection, nft_name, account: Account):
 
 
 def transact(sender: Account, function: str, type_args: list, args: list, seq: int = None):
-
+    global seq_num
     txn_request = {
         "sender": f"{sender.address()}",
         "sequence_number": f"{seq_num if seq == None else seq}",
@@ -165,14 +166,17 @@ def get_balance():
 
 
 def start_mint_wait(start_time_h: int, factory: str, count: int, tries: int):
+    global seq_num
     if not seq_num:
         seq_num = rest_client.account_sequence_number(acc.address())
 
     print("SEQ =", seq_num)
 
     now = datetime.datetime.now()
-    print(now.hour)
+    print("time left", start_time_h-now.hour-1, ":", 60-now.minute)
     print("waiting...")
+    
+    # ЖДЕМ НАЧАЛА
     while True:
         if now.hour == start_time_h:
             break
